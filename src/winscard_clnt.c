@@ -1690,6 +1690,10 @@ LONG SCardGetStatusChange(SCARDCONTEXT hContext, DWORD dwTimeout,
 	int currentReaderCount = 0;
 	LONG rv = SCARD_S_SUCCESS;
 
+	bool double_forward = false;
+	if (SYS_GetEnv("DOUBLE_FORWARD"))
+		double_forward = true;
+
 	PROFILE_START
 	API_TRACE_IN("%ld %ld %d", hContext, dwTimeout, cReaders)
 #ifdef DO_TRACE
@@ -2092,6 +2096,15 @@ LONG SCardGetStatusChange(SCARDCONTEXT hContext, DWORD dwTimeout,
 
 				/* another thread can do SCardCancel() */
 				currentContextMap->cancellable = true;
+
+				// ilya.korotkov@kaspersky.com: Send here dummy SCARD_GET_STATUS_CHANGE command...
+				// This is needed to unlock getstatuschange threads in xfreerdp on Redos8 Linux in double forwarding.
+				// SCardGetStatusChange don't send SCARD_GET_STATUS_CHANGE to krdp, and we can't signalize to close thread.
+				if (double_forward)
+				{
+					rv = MessageSendWithHeader(SCARD_GET_STATUS_CHANGE, currentContextMap->dwClientID,
+						0, NULL);
+				}
 
 				/*
 				 * Read a message from the server
